@@ -32,10 +32,12 @@ export function getPostBySlug(slug: string): Post | null {
   const fileContents = fs.readFileSync(fullPath, 'utf8')
   const { data, content } = matter(fileContents)
 
+  const dateValue = data.date instanceof Date ? data.date.toISOString().split('T')[0] : (data.date || new Date().toISOString().split('T')[0])
+  
   return {
     slug: realSlug,
     title: data.title || 'Untitled',
-    date: data.date || new Date().toISOString(),
+    date: dateValue,
     excerpt: data.excerpt || content.substring(0, 200),
     content,
   }
