@@ -9,7 +9,7 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: "Shiba's Blog",
   description: 'A Next.js blog with Markdown support',
-  authors: [{ name: 'Shiba', email: 'douchai@coze.email' }],
+  authors: [{ name: 'Shiba', url: 'https://github.com/Debugooo' }],
   openGraph: {
     title: "Shiba's Blog",
     description: 'A Next.js blog with Markdown support',
