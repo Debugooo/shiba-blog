@@ -16,7 +16,9 @@
     "gray-matter": "^4.0.3",
     "remark": "^15.0.1",
     "remark-html": "^16.0.1",
-    "rss": "^1.2.2"
+    "rss": "^1.2.2",
+    "jose": "^5.2.2",
+    "@giscus/react": "^2.4.0"
   },
   "devDependencies": {
     "typescript": "^5.4.5",

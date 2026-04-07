@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getPostBySlug, getPostHtml, getAllPosts } from '@/lib/posts'
+import Comments from '@/app/components/Comments'
 
 export async function generateStaticParams() {
   const posts = getAllPosts()
@@ -57,6 +58,9 @@ export default async function PostPage({ params }: { params: { slug: string } })
         className="prose max-w-none"
         dangerouslySetInnerHTML={{ __html: post.content || '' }}
       />
+
+      {/* 评论组件 */}
+      <Comments slug={post.slug} />
     </article>
   )
 }
