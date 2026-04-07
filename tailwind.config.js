@@ -8,30 +8,62 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // 深色主题 - Inkwell 风格
+        // 温暖友好的社交平台配色 - 参考 AgentLink
+        primary: {
+          50: '#fff7ed',
+          100: '#ffedd5',
+          200: '#fed7aa',
+          300: '#fdba74',
+          400: '#fb923c',
+          500: '#f97316',
+          600: '#ea580c',
+          700: '#c2410c',
+          800: '#9a3412',
+          900: '#7c2d12',
+        },
+        // 温暖的粉色/紫色
+        secondary: {
+          50: '#fdf4ff',
+          100: '#fae8ff',
+          200: '#f5d0fe',
+          300: '#f0abfc',
+          400: '#e879f9',
+          500: '#d946ef',
+          600: '#c026d3',
+          700: '#a21caf',
+          800: '#86198f',
+          900: '#701a75',
+        },
+        // 深色主题
         dark: {
-          bg: '#121212',
-          card: '#1E1E1E',
-          cardHover: '#2A2A2A',
-          border: '#2A2A2A',
-          text: '#FFFFFF',
-          textSecondary: 'rgba(255, 255, 255, 0.6)',
-          textTertiary: 'rgba(255, 255, 255, 0.45)',
+          bg: '#0f0f0f',
+          surface: '#1a1a1a',
+          border: '#2a2a2a',
+          text: '#ffffff',
+          textSecondary: 'rgba(255, 255, 255, 0.7)',
+          textTertiary: 'rgba(255, 255, 255, 0.5)',
         },
-        // 强调色 - 温暖的橙色/黄色
-        accent: {
-          primary: '#FF9500',
-          secondary: '#FFB340',
-          hover: '#E58600',
-        },
-        // 亮色主题 - 现代简约
+        // 亮色主题
         light: {
-          bg: '#FFFFFF',
-          card: '#F5F5F5',
-          cardHover: '#E8E8E8',
-          border: '#E0E0E0',
-          text: '#000000',
-          textSecondary: 'rgba(0, 0, 0, 0.6)',
+          bg: '#ffffff',
+          surface: '#fafafa',
+          border: '#e5e5e5',
+          text: '#171717',
+          textSecondary: 'rgba(0, 0, 0, 0.7)',
+          textTertiary: 'rgba(0, 0, 0, 0.5)',
+        },
+        // 成功/错误/警告
+        success: {
+          light: '#10b981',
+          dark: '#059669',
+        },
+        error: {
+          light: '#ef4444',
+          dark: '#dc2626',
+        },
+        warning: {
+          light: '#f59e0b',
+          dark: '#d97706',
         },
       },
       borderRadius: {
@@ -40,10 +72,25 @@ module.exports = {
         '4xl': '2rem',
       },
       boxShadow: {
-        'card': '0 2px 8px rgba(0, 0, 0, 0.08)',
+        'card': '0 2px 8px rgba(0, 0, 0, 0.06)',
         'card-dark': '0 2px 8px rgba(0, 0, 0, 0.3)',
-        'card-hover': '0 4px 16px rgba(0, 0, 0, 0.12)',
+        'card-hover': '0 4px 16px rgba(0, 0, 0, 0.1)',
         'card-hover-dark': '0 4px 16px rgba(0, 0, 0, 0.4)',
+      },
+      animation: {
+        'bounce-slow': 'bounce 3s infinite',
+        'fade-in': 'fadeIn 0.3s ease-in',
+        'slide-up': 'slideUp 0.3s ease-out',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideUp: {
+          '0%': { transform: 'translateY(10px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
       },
     },
   },

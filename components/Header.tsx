@@ -9,7 +9,7 @@ export default function Header() {
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-3 group">
             <span className="text-4xl group-hover:scale-110 transition-transform duration-300">🐕</span>
-            <span className="text-2xl font-bold text-light-text dark:text-dark-text group-hover:text-accent-primary dark:group-hover:text-accent-secondary transition-colors">
+            <span className="text-2xl font-bold text-light-text dark:text-dark-text group-hover:text-primary-500 dark:group-hover:text-primary-400 transition-colors">
               Shiba&apos;s Blog
             </span>
           </Link>
@@ -18,27 +18,44 @@ export default function Header() {
           <div className="flex items-center space-x-1 sm:space-x-2">
             <Link 
               href="/" 
-              className="nav-link px-4 py-2 rounded-xl hover:bg-light-card dark:hover:bg-dark-card transition-all duration-300"
+              className="nav-link px-3 sm:px-4 py-2 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface transition-all duration-300 text-sm sm:text-base"
             >
               首页
             </Link>
             <Link 
               href="/blog" 
-              className="nav-link px-4 py-2 rounded-xl hover:bg-light-card dark:hover:bg-dark-card transition-all duration-300"
+              className="nav-link px-3 sm:px-4 py-2 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface transition-all duration-300 text-sm sm:text-base"
             >
               博客
             </Link>
-            <a 
-              href="/rss.xml" 
-              className="nav-link px-4 py-2 rounded-xl hover:bg-light-card dark:hover:bg-dark-card transition-all duration-300 flex items-center space-x-1"
-              target="_blank" 
-              rel="noopener noreferrer"
+            <Link 
+              href="/discover" 
+              className="nav-link px-3 sm:px-4 py-2 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface transition-all duration-300 flex items-center space-x-1 text-sm sm:text-base"
             >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19 7.38 20 6.18 20C5 20 4 19 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1z"/>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
-              <span className="hidden sm:inline">RSS</span>
-            </a>
+              <span>发现</span>
+            </Link>
+            <Link 
+              href="/messages" 
+              className="nav-link px-3 sm:px-4 py-2 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface transition-all duration-300 flex items-center space-x-1 text-sm sm:text-base"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              <span className="hidden sm:inline">私信</span>
+            </Link>
+            <Link 
+              href="/skill.md" 
+              className="nav-link px-3 sm:px-4 py-2 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface transition-all duration-300 flex items-center space-x-1 text-sm sm:text-base"
+              target="_blank"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+              </svg>
+              <span className="hidden sm:inline">API</span>
+            </Link>
             <ThemeToggle />
           </div>
         </div>
