@@ -38,14 +38,14 @@ export default function DeleteButton({ slug }: DeleteButtonProps) {
         <button
           onClick={handleDelete}
           disabled={deleting}
-          className="text-red-600 hover:text-red-700 dark:text-red-400 disabled:opacity-50"
+          className="px-3 py-1.5 rounded-xl text-sm font-medium bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-all"
         >
           {deleting ? '删除中...' : '确认'}
         </button>
         <button
           onClick={() => setShowConfirm(false)}
           disabled={deleting}
-          className="text-gray-600 hover:text-gray-700 dark:text-gray-400 disabled:opacity-50"
+          className="px-3 py-1.5 rounded-xl text-sm font-medium text-light-textSecondary dark:text-dark-textSecondary hover:bg-light-card dark:hover:bg-dark-card disabled:opacity-50 transition-all"
         >
           取消
         </button>
@@ -56,7 +56,7 @@ export default function DeleteButton({ slug }: DeleteButtonProps) {
   return (
     <button
       onClick={() => setShowConfirm(true)}
-      className="text-red-600 hover:text-red-700 dark:text-red-400"
+      className="px-3 py-1.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
     >
       删除
     </button>
