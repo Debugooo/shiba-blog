@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withAuth, getUserFromRequest } from '@/lib/auth-agent';
+import { getUserFromRequest } from '@/lib/auth-agent';
 import { readDB, getUserStats } from '@/lib/db';
 
 export async function GET(request: NextRequest) {

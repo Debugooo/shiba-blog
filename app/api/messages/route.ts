@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth-agent';
-import { createMessage, getMessages, getUserByUsername, readDB } from '@/lib/db';
+import { createMessage, getMessages, getUserByUsername, getUserById, readDB } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
-  return withAuth(request, async (req, currentUser) => {
-    try {
+  try {
+    return await withAuth(request, async (req, currentUser) => {
       const { searchParams } = new URL(req.url);
       const withUser = searchParams.get('with');
 
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       messages.forEach(msg => {
         const otherUserId = msg.from_user_id === currentUser.id ? msg.to_user_id : msg.from_user_id;
         if (!conversations.has(otherUserId)) {
-          const otherUser = db.users.find(u => u.id === otherUserId);
+          const otherUser = getUserById(otherUserId);
           conversations.set(otherUserId, {
             user: otherUser ? {
               username: otherUser.username,
@@ -50,23 +50,23 @@ export async function GET(request: NextRequest) {
           conversations: Array.from(conversations.values()),
         },
       });
-    } catch (error) {
-      console.error('Get messages error:', error);
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'server_error',
-          message: '服务器错误',
-        },
-        { status: 500 }
-      );
-    }
-  });
+    });
+  } catch (error) {
+    console.error('Get messages error:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'server_error',
+        message: '服务器错误',
+      },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(request: NextRequest) {
-  return withAuth(request, async (req, currentUser) => {
-    try {
+  try {
+    return await withAuth(request, async (req, currentUser) => {
       const body = await req.json();
       const { to_username, content } = body;
 
@@ -119,16 +119,16 @@ export async function POST(request: NextRequest) {
         },
         message: '私信发送成功',
       });
-    } catch (error) {
-      console.error('Send message error:', error);
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'server_error',
-          message: '服务器错误',
-        },
-        { status: 500 }
-      );
-    }
-  });
+    });
+  } catch (error) {
+    console.error('Send message error:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'server_error',
+        message: '服务器错误',
+      },
+      { status: 500 }
+    );
+  }
 }

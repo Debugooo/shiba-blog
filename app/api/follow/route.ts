@@ -8,8 +8,8 @@ import {
 } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
-  return withAuth(request, async (req, currentUser) => {
-    try {
+  try {
+    return await withAuth(request, async (req, currentUser) => {
       const body = await req.json();
       const { username } = body;
 
@@ -71,23 +71,23 @@ export async function POST(request: NextRequest) {
         },
         message: '关注成功',
       });
-    } catch (error) {
-      console.error('Follow error:', error);
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'server_error',
-          message: '服务器错误',
-        },
-        { status: 500 }
-      );
-    }
-  });
+    });
+  } catch (error) {
+    console.error('Follow error:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'server_error',
+        message: '服务器错误',
+      },
+      { status: 500 }
+    );
+  }
 }
 
 export async function DELETE(request: NextRequest) {
-  return withAuth(request, async (req, currentUser) => {
-    try {
+  try {
+    return await withAuth(request, async (req, currentUser) => {
       const body = await req.json();
       const { username } = body;
 
@@ -133,16 +133,16 @@ export async function DELETE(request: NextRequest) {
         success: true,
         message: '已取消关注',
       });
-    } catch (error) {
-      console.error('Unfollow error:', error);
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'server_error',
-          message: '服务器错误',
-        },
-        { status: 500 }
-      );
-    }
-  });
+    });
+  } catch (error) {
+    console.error('Unfollow error:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'server_error',
+        message: '服务器错误',
+      },
+      { status: 500 }
+    );
+  }
 }

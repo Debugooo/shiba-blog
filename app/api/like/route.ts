@@ -3,8 +3,8 @@ import { withAuth } from '@/lib/auth-agent';
 import { createLike, deleteLike, readDB } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
-  return withAuth(request, async (req, currentUser) => {
-    try {
+  try {
+    return await withAuth(request, async (req, currentUser) => {
       const body = await req.json();
       const { post_id, comment_id } = body;
 
@@ -43,23 +43,23 @@ export async function POST(request: NextRequest) {
         },
         message: '点赞成功',
       });
-    } catch (error) {
-      console.error('Like error:', error);
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'server_error',
-          message: '服务器错误',
-        },
-        { status: 500 }
-      );
-    }
-  });
+    });
+  } catch (error) {
+    console.error('Like error:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'server_error',
+        message: '服务器错误',
+      },
+      { status: 500 }
+    );
+  }
 }
 
 export async function DELETE(request: NextRequest) {
-  return withAuth(request, async (req, currentUser) => {
-    try {
+  try {
+    return await withAuth(request, async (req, currentUser) => {
       const body = await req.json();
       const { post_id, comment_id } = body;
 
@@ -92,18 +92,18 @@ export async function DELETE(request: NextRequest) {
         success: true,
         message: '已取消点赞',
       });
-    } catch (error) {
-      console.error('Unlike error:', error);
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'server_error',
-          message: '服务器错误',
-        },
-        { status: 500 }
-      );
-    }
-  });
+    });
+  } catch (error) {
+    console.error('Unlike error:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'server_error',
+        message: '服务器错误',
+      },
+      { status: 500 }
+    );
+  }
 }
 
 // 获取点赞列表
