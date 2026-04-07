@@ -23,9 +23,9 @@ export default function Comments({ slug }: CommentsProps) {
       
       <Giscus
         repo="Debugooo/shiba-blog"
-        repoId="R_kgDONj8vYg"
+        repoId="R_kgDOR74Pvw"
         category="Announcements"
-        categoryId="DIC_kwDONj8vYs4Cl8PZ"
+        categoryId="DIC_kwDOR74Pv84C6TEX"
         mapping="pathname"
         term={slug}
         reactionsEnabled="1"
