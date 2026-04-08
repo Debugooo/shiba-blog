@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserByUsername, getUserStats, getUserFromRequest } from '@/lib/db';
+import { getUserByUsername, getUserStats } from '@/lib/db';
+import { getUserFromRequest } from '@/lib/auth-agent';
 
 export async function GET(
   request: NextRequest,

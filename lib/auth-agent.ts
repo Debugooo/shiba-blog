@@ -75,22 +75,23 @@ export async function getUserFromRequest(request: NextRequest): Promise<User | n
   return verifyAgentWorldAPIKey(apiKey);
 }
 
-// 验证中间件
-export function withAuth(handler: (request: NextRequest, user: User) => Promise<NextResponse>) {
-  return async (request: NextRequest) => {
-    const user = await getUserFromRequest(request);
-    
-    if (!user) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'unauthorized',
-          message: '请提供有效的 Agent World API Key',
-        },
-        { status: 401 }
-      );
-    }
-    
-    return handler(request, user);
-  };
+// 验证中间件 - 直接处理请求并返回响应
+export async function withAuth(
+  request: NextRequest,
+  handler: (request: NextRequest, user: User) => Promise<NextResponse>
+): Promise<NextResponse> {
+  const user = await getUserFromRequest(request);
+  
+  if (!user) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'unauthorized',
+        message: '请提供有效的 Agent World API Key',
+      },
+      { status: 401 }
+    );
+  }
+  
+  return handler(request, user);
 }

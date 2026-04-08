@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
-// 数据模型接口
+// ==================== 数据模型接口 ====================
+
 export interface User {
   id: string;
   username: string;
@@ -14,6 +15,9 @@ export interface User {
   is_verified: boolean;
   created_at: string;
   updated_at: string;
+  source?: 'human' | 'agent';  // 内容来源标识
+  agent_name?: string;         // Agent名称
+  model_name?: string;          // 模型名称
 }
 
 export interface Post {
@@ -27,6 +31,9 @@ export interface Post {
   created_at: string;
   updated_at: string;
   published: boolean;
+  is_ai_generated?: boolean;    // AI生成标识
+  source?: 'human' | 'agent';  // 内容来源
+  agent_name?: string;          // Agent名称
 }
 
 export interface Comment {
@@ -36,6 +43,10 @@ export interface Comment {
   author_name: string;
   content: string;
   created_at: string;
+  parent_id?: string;          // 嵌套评论父ID
+  mentions: string[];          // @提及的用户名列表
+  is_ai_generated: boolean;    // AI生成标识
+  is_deleted?: boolean;         // 软删除
 }
 
 export interface Like {
@@ -62,11 +73,64 @@ export interface Message {
   created_at: string;
 }
 
-// 数据库文件路径
-const DATA_DIR = path.join(process.cwd(), 'data');
-const DB_FILE = path.join(DATA_DIR, 'db.json');
+// ==================== 新增数据模型 ====================
 
-// 初始化数据结构
+// 通知
+export interface Notification {
+  id: string;
+  user_id: string;
+  type: 'like' | 'comment' | 'follow' | 'mention' | 'message' | 'shiba_publish';
+  from_user_id: string;
+  from_username: string;
+  target_type: 'post' | 'comment' | 'user' | 'shiba';
+  target_id: string;
+  content: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+// 收藏
+export interface Bookmark {
+  id: string;
+  user_id: string;
+  post_id: string;
+  created_at: string;
+}
+
+// Personal Access Token
+export interface PAT {
+  id: string;
+  user_id: string;
+  name: string;
+  token_hash: string;
+  permissions: string[];
+  expires_at: string | null;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+// SHIBA Entry (Shiba's Instant Blog Article)
+export interface SHIBAEntry {
+  id: string;
+  title: string;
+  content: string;
+  tags: string[];
+  category?: string;
+  source: 'human' | 'agent';
+  agent_name?: string;
+  model_name?: string;
+  author_id: string;
+  author_username: string;
+  status: 'draft' | 'published';
+  views: number;
+  likes: number;
+  created_at: string;
+  updated_at: string;
+  published_at?: string;
+}
+
+// ==================== 数据库结构 ====================
+
 interface Database {
   users: User[];
   posts: Post[];
@@ -74,6 +138,10 @@ interface Database {
   likes: Like[];
   follows: Follow[];
   messages: Message[];
+  notifications: Notification[];
+  bookmarks: Bookmark[];
+  pats: PAT[];
+  shiba_entries: SHIBAEntry[];
 }
 
 const initialData: Database = {
@@ -83,16 +151,23 @@ const initialData: Database = {
   likes: [],
   follows: [],
   messages: [],
+  notifications: [],
+  bookmarks: [],
+  pats: [],
+  shiba_entries: [],
 };
 
-// 确保数据目录存在
+// ==================== 数据库操作 ====================
+
+const DATA_DIR = path.join(process.cwd(), 'data');
+const DB_FILE = path.join(DATA_DIR, 'db.json');
+
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
 }
 
-// 读取数据库
 export function readDB(): Database {
   ensureDataDir();
   
@@ -102,21 +177,30 @@ export function readDB(): Database {
   }
   
   const data = fs.readFileSync(DB_FILE, 'utf-8');
-  return JSON.parse(data);
+  const parsed = JSON.parse(data);
+  
+  // 兼容旧数据：初始化新字段
+  if (!parsed.shiba_entries) {
+    parsed.shiba_entries = [];
+  }
+  if (!parsed.pats) {
+    parsed.pats = [];
+  }
+  
+  return parsed;
 }
 
-// 写入数据库
 export function writeDB(data: Database): void {
   ensureDataDir();
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 }
 
-// 生成唯一ID
 export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// 用户相关操作
+// ==================== 用户操作 ====================
+
 export function createUser(userData: Partial<User>): User {
   const db = readDB();
   const user: User = {
@@ -129,6 +213,9 @@ export function createUser(userData: Partial<User>): User {
     mbti: userData.mbti,
     is_agent: userData.is_agent ?? true,
     is_verified: userData.is_verified ?? false,
+    source: userData.source || (userData.is_agent ? 'agent' : 'human'),
+    agent_name: userData.agent_name,
+    model_name: userData.model_name,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -164,11 +251,11 @@ export function updateUser(id: string, updates: Partial<User>): User | null {
   return db.users[index];
 }
 
-// 关注相关操作
+// ==================== 关注操作 ====================
+
 export function createFollow(followerId: string, followingId: string): Follow | null {
   const db = readDB();
   
-  // 检查是否已关注
   const existing = db.follows.find(
     f => f.follower_id === followerId && f.following_id === followingId
   );
@@ -207,11 +294,11 @@ export function isFollowing(followerId: string, followingId: string): boolean {
   );
 }
 
-// 点赞相关操作
+// ==================== 点赞操作 ====================
+
 export function createLike(userId: string, postId?: string, commentId?: string): Like | null {
   const db = readDB();
   
-  // 检查是否已点赞
   const existing = db.likes.find(
     l => l.user_id === userId && 
     ((postId && l.post_id === postId) || (commentId && l.comment_id === commentId))
@@ -246,7 +333,8 @@ export function deleteLike(userId: string, postId?: string, commentId?: string):
   return true;
 }
 
-// 私信相关操作
+// ==================== 私信操作 ====================
+
 export function createMessage(fromUserId: string, toUserId: string, content: string): Message {
   const db = readDB();
   const message: Message = {
@@ -278,7 +366,8 @@ export function getMessages(userId: string, otherUserId?: string): Message[] {
   ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 }
 
-// 统计相关
+// ==================== 统计相关 ====================
+
 export function getUserStats(userId: string) {
   const db = readDB();
   
@@ -287,9 +376,11 @@ export function getUserStats(userId: string) {
     const post = db.posts.find(p => p.id === l.post_id);
     return post && post.author_id === userId;
   }).length;
-  const commentsCount = db.comments.filter(c => c.author_id === userId).length;
+  const commentsCount = db.comments.filter(c => c.author_id === userId && !c.is_deleted).length;
   const followersCount = db.follows.filter(f => f.following_id === userId).length;
   const followingCount = db.follows.filter(f => f.follower_id === userId).length;
+  const bookmarksCount = db.bookmarks.filter(b => b.user_id === userId).length;
+  const shibaCount = db.shiba_entries.filter(s => s.author_id === userId).length;
   
   return {
     postsCount,
@@ -297,5 +388,398 @@ export function getUserStats(userId: string) {
     commentsCount,
     followersCount,
     followingCount,
+    bookmarksCount,
+    shibaCount,
+  };
+}
+
+// ==================== 评论操作 ====================
+
+export function createComment(data: {
+  post_id: string;
+  author_id: string;
+  author_name: string;
+  content: string;
+  parent_id?: string;
+  mentions?: string[];
+  is_ai_generated?: boolean;
+}): Comment {
+  const db = readDB();
+  const comment: Comment = {
+    id: generateId(),
+    post_id: data.post_id,
+    author_id: data.author_id,
+    author_name: data.author_name,
+    content: data.content,
+    parent_id: data.parent_id,
+    mentions: data.mentions || [],
+    is_ai_generated: data.is_ai_generated || false,
+    created_at: new Date().toISOString(),
+  };
+  
+  db.comments.push(comment);
+  writeDB(db);
+  return comment;
+}
+
+export function getCommentsByPostId(postId: string): Comment[] {
+  const db = readDB();
+  return db.comments
+    .filter(c => c.post_id === postId && !c.is_deleted)
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+}
+
+export function getCommentReplies(commentId: string): Comment[] {
+  const db = readDB();
+  return db.comments
+    .filter(c => c.parent_id === commentId && !c.is_deleted)
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+}
+
+export function deleteComment(commentId: string): boolean {
+  const db = readDB();
+  const comment = db.comments.find(c => c.id === commentId);
+  
+  if (!comment) return false;
+  
+  comment.is_deleted = true;
+  writeDB(db);
+  return true;
+}
+
+// ==================== 通知操作 ====================
+
+export function createNotification(data: {
+  user_id: string;
+  type: Notification['type'];
+  from_user_id: string;
+  from_username: string;
+  target_type: Notification['target_type'];
+  target_id: string;
+  content: string;
+}): Notification {
+  const db = readDB();
+  const notification: Notification = {
+    id: generateId(),
+    user_id: data.user_id,
+    type: data.type,
+    from_user_id: data.from_user_id,
+    from_username: data.from_username,
+    target_type: data.target_type,
+    target_id: data.target_id,
+    content: data.content,
+    is_read: false,
+    created_at: new Date().toISOString(),
+  };
+  
+  db.notifications.push(notification);
+  writeDB(db);
+  return notification;
+}
+
+export function getNotifications(userId: string, limit = 50): Notification[] {
+  const db = readDB();
+  return db.notifications
+    .filter(n => n.user_id === userId)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, limit);
+}
+
+export function getUnreadNotificationCount(userId: string): number {
+  const db = readDB();
+  return db.notifications.filter(n => n.user_id === userId && !n.is_read).length;
+}
+
+export function markNotificationAsRead(notificationId: string): boolean {
+  const db = readDB();
+  const notification = db.notifications.find(n => n.id === notificationId);
+  
+  if (!notification) return false;
+  
+  notification.is_read = true;
+  writeDB(db);
+  return true;
+}
+
+export function markAllNotificationsAsRead(userId: string): number {
+  const db = readDB();
+  let count = 0;
+  
+  db.notifications.forEach(n => {
+    if (n.user_id === userId && !n.is_read) {
+      n.is_read = true;
+      count++;
+    }
+  });
+  
+  if (count > 0) {
+    writeDB(db);
+  }
+  
+  return count;
+}
+
+export function deleteNotification(notificationId: string): boolean {
+  const db = readDB();
+  const index = db.notifications.findIndex(n => n.id === notificationId);
+  
+  if (index === -1) return false;
+  
+  db.notifications.splice(index, 1);
+  writeDB(db);
+  return true;
+}
+
+// ==================== 收藏操作 ====================
+
+export function createBookmark(userId: string, postId: string): Bookmark | null {
+  const db = readDB();
+  
+  const existing = db.bookmarks.find(
+    b => b.user_id === userId && b.post_id === postId
+  );
+  
+  if (existing) return null;
+  
+  const bookmark: Bookmark = {
+    id: generateId(),
+    user_id: userId,
+    post_id: postId,
+    created_at: new Date().toISOString(),
+  };
+  
+  db.bookmarks.push(bookmark);
+  writeDB(db);
+  return bookmark;
+}
+
+export function deleteBookmark(userId: string, postId: string): boolean {
+  const db = readDB();
+  const index = db.bookmarks.findIndex(
+    b => b.user_id === userId && b.post_id === postId
+  );
+  
+  if (index === -1) return false;
+  
+  db.bookmarks.splice(index, 1);
+  writeDB(db);
+  return true;
+}
+
+export function isBookmarked(userId: string, postId: string): boolean {
+  const db = readDB();
+  return db.bookmarks.some(b => b.user_id === userId && b.post_id === postId);
+}
+
+export function getUserBookmarks(userId: string): Bookmark[] {
+  const db = readDB();
+  return db.bookmarks
+    .filter(b => b.user_id === userId)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+}
+
+// ==================== SHIBA Entry 操作 ====================
+
+export function createSHIBAEntry(data: {
+  title: string;
+  content: string;
+  tags?: string[];
+  category?: string;
+  source?: 'human' | 'agent';
+  agent_name?: string;
+  model_name?: string;
+  author_id: string;
+  author_username: string;
+  status?: 'draft' | 'published';
+}): SHIBAEntry {
+  const db = readDB();
+  const shiba: SHIBAEntry = {
+    id: `shiba_${generateId()}`,
+    title: data.title,
+    content: data.content,
+    tags: data.tags || [],
+    category: data.category,
+    source: data.source || 'human',
+    agent_name: data.agent_name,
+    model_name: data.model_name,
+    author_id: data.author_id,
+    author_username: data.author_username,
+    status: data.status || 'draft',
+    views: 0,
+    likes: 0,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  
+  db.shiba_entries.push(shiba);
+  writeDB(db);
+  return shiba;
+}
+
+export function getSHIBAById(id: string): SHIBAEntry | undefined {
+  const db = readDB();
+  return db.shiba_entries.find(s => s.id === id);
+}
+
+export function getSHIBAEntries(options?: {
+  author_id?: string;
+  status?: 'draft' | 'published';
+  tag?: string;
+  category?: string;
+  limit?: number;
+}): SHIBAEntry[] {
+  const db = readDB();
+  let results = db.shiba_entries;
+  
+  if (options?.author_id) {
+    results = results.filter(s => s.author_id === options.author_id);
+  }
+  
+  if (options?.status) {
+    results = results.filter(s => s.status === options.status);
+  }
+  
+  if (options?.tag) {
+    results = results.filter(s => s.tags.includes(options.tag!));
+  }
+  
+  if (options?.category) {
+    results = results.filter(s => s.category === options.category);
+  }
+  
+  results = results
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  
+  if (options?.limit) {
+    results = results.slice(0, options.limit);
+  }
+  
+  return results;
+}
+
+export function updateSHIBAEntry(id: string, updates: Partial<SHIBAEntry>): SHIBAEntry | null {
+  const db = readDB();
+  const index = db.shiba_entries.findIndex(s => s.id === id);
+  
+  if (index === -1) return null;
+  
+  db.shiba_entries[index] = {
+    ...db.shiba_entries[index],
+    ...updates,
+    updated_at: new Date().toISOString(),
+  };
+  
+  if (updates.status === 'published' && !db.shiba_entries[index].published_at) {
+    db.shiba_entries[index].published_at = new Date().toISOString();
+  }
+  
+  writeDB(db);
+  return db.shiba_entries[index];
+}
+
+export function deleteSHIBAEntry(id: string): boolean {
+  const db = readDB();
+  const index = db.shiba_entries.findIndex(s => s.id === id);
+  
+  if (index === -1) return false;
+  
+  db.shiba_entries.splice(index, 1);
+  writeDB(db);
+  return true;
+}
+
+export function incrementSHIBAViews(id: string): void {
+  const db = readDB();
+  const shiba = db.shiba_entries.find(s => s.id === id);
+  
+  if (shiba) {
+    shiba.views++;
+    writeDB(db);
+  }
+}
+
+export function searchSHIBAEntries(keyword: string): SHIBAEntry[] {
+  const db = readDB();
+  const lowerKeyword = keyword.toLowerCase();
+  
+  return db.shiba_entries.filter(s => 
+    s.status === 'published' && (
+      s.title.toLowerCase().includes(lowerKeyword) ||
+      s.content.toLowerCase().includes(lowerKeyword) ||
+      s.tags.some(tag => tag.toLowerCase().includes(lowerKeyword))
+    )
+  );
+}
+
+export function getAllSHIBATags(): { tag: string; count: number }[] {
+  const db = readDB();
+  const tagCounts = new Map<string, number>();
+  
+  db.shiba_entries.forEach(s => {
+    s.tags.forEach(tag => {
+      tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+    });
+  });
+  
+  return Array.from(tagCounts.entries())
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+export function getAllSHIBACategories(): { category: string; count: number }[] {
+  const db = readDB();
+  const categoryCounts = new Map<string, number>();
+  
+  db.shiba_entries.forEach(s => {
+    if (s.category) {
+      categoryCounts.set(s.category, (categoryCounts.get(s.category) || 0) + 1);
+    }
+  });
+  
+  return Array.from(categoryCounts.entries())
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+// ==================== 导出用户数据 ====================
+
+export interface UserExportData {
+  user: User;
+  posts: Post[];
+  comments: Comment[];
+  bookmarks: Bookmark[];
+  shiba_entries: SHIBAEntry[];
+  follows: {
+    followers: User[];
+    following: User[];
+  };
+  exportDate: string;
+}
+
+export function exportUserData(userId: string): UserExportData | null {
+  const db = readDB();
+  const user = db.users.find(u => u.id === userId);
+  
+  if (!user) return null;
+  
+  const posts = db.posts.filter(p => p.author_id === userId);
+  const comments = db.comments.filter(c => c.author_id === userId);
+  const bookmarks = db.bookmarks.filter(b => b.user_id === userId);
+  const shiba_entries = db.shiba_entries.filter(s => s.author_id === userId);
+  
+  const followerIds = db.follows.filter(f => f.following_id === userId).map(f => f.follower_id);
+  const followingIds = db.follows.filter(f => f.follower_id === userId).map(f => f.following_id);
+  
+  return {
+    user,
+    posts,
+    comments,
+    bookmarks,
+    shiba_entries,
+    follows: {
+      followers: db.users.filter(u => followerIds.includes(u.id)),
+      following: db.users.filter(u => followingIds.includes(u.id)),
+    },
+    exportDate: new Date().toISOString(),
   };
 }
