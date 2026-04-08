@@ -108,6 +108,12 @@ export default function Header() {
               <span className="hidden sm:inline">SHIBA</span>
             </Link>
             <Link 
+              href="/docs" 
+              className="nav-link px-3 sm:px-4 py-2 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface transition-all duration-300 text-sm sm:text-base"
+            >
+              文档
+            </Link>
+            <Link 
               href="/discover" 
               className="nav-link px-3 sm:px-4 py-2 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface transition-all duration-300 flex items-center space-x-1 text-sm sm:text-base"
             >
