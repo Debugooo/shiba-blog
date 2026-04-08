@@ -18,6 +18,13 @@ import {
   toShortId,
 } from '@/lib/db';
 
+// SHIBA API Headers
+const SHIBA_RESPONSE_HEADERS = {
+  'X-Shiba-Source': 'agent',
+  'X-Shiba-Agent': 'Shiba Blog API',
+  'X-Shiba-Model': 'API-v1.1.0',
+};
+
 // 获取SHIBA条目列表
 export async function GET(request: NextRequest) {
   try {
@@ -37,16 +44,16 @@ export async function GET(request: NextRequest) {
           entries: results.slice(0, limit),
           total: results.length,
         },
-      });
+      }, { headers: SHIBA_RESPONSE_HEADERS });
     }
     
     // 获取所有标签
     if (searchParams.get('tags') === 'true') {
-      const tags = getAllSHIBATags();
+      const tags = getAllSHIBATags().slice(0, 20); // 只返回前20个
       return NextResponse.json({
         success: true,
         data: { tags },
-      });
+      }, { headers: SHIBA_RESPONSE_HEADERS });
     }
     
     // 获取所有分类
@@ -55,7 +62,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         success: true,
         data: { categories },
-      });
+      }, { headers: SHIBA_RESPONSE_HEADERS });
     }
     
     // 获取状态统计
@@ -72,7 +79,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         success: true,
         data: { stats },
-      });
+      }, { headers: SHIBA_RESPONSE_HEADERS });
     }
     
     // 获取条目列表
@@ -86,12 +93,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: { entries },
-    });
+    }, { headers: SHIBA_RESPONSE_HEADERS });
   } catch (error) {
     console.error('Get SHIBA entries error:', error);
     return NextResponse.json(
       { success: false, error: 'server_error', message: '服务器错误' },
-      { status: 500 }
+      { status: 500, headers: SHIBA_RESPONSE_HEADERS }
     );
   }
 }
@@ -106,7 +113,7 @@ export async function POST(request: NextRequest) {
       if (!title || !content) {
         return NextResponse.json(
           { success: false, error: 'missing_fields', message: 'title和content是必填字段' },
-          { status: 400 }
+          { status: 400, headers: SHIBA_RESPONSE_HEADERS }
         );
       }
       
@@ -131,13 +138,13 @@ export async function POST(request: NextRequest) {
         },
         message: 'SHIBA条目创建成功',
         last_created_entry_id: entry.id,
-      });
+      }, { headers: SHIBA_RESPONSE_HEADERS });
     });
   } catch (error) {
     console.error('Create SHIBA entry error:', error);
     return NextResponse.json(
       { success: false, error: 'server_error', message: '服务器错误' },
-      { status: 500 }
+      { status: 500, headers: SHIBA_RESPONSE_HEADERS }
     );
   }
 }
@@ -159,7 +166,7 @@ export async function PUT(request: NextRequest) {
           if (!lastId) {
             return NextResponse.json(
               { success: false, error: 'no_last_entry', message: '没有最近创建的条目' },
-              { status: 400 }
+              { status: 400, headers: SHIBA_RESPONSE_HEADERS }
             );
           }
           targetId = lastId;
@@ -176,14 +183,14 @@ export async function PUT(request: NextRequest) {
         if (!entry) {
           return NextResponse.json(
             { success: false, error: 'not_found', message: 'SHIBA条目不存在' },
-            { status: 404 }
+            { status: 404, headers: SHIBA_RESPONSE_HEADERS }
           );
         }
         
         if (entry.author_id !== currentUser.id) {
           return NextResponse.json(
             { success: false, error: 'forbidden', message: '无权限' },
-            { status: 403 }
+            { status: 403, headers: SHIBA_RESPONSE_HEADERS }
           );
         }
         
@@ -198,7 +205,7 @@ export async function PUT(request: NextRequest) {
                 status: 'published',
               },
               message: '已发布',
-            });
+            }, { headers: SHIBA_RESPONSE_HEADERS });
             
           case 'unpublish':
             updateSHIBAEntry(targetId, { status: 'draft' });
@@ -210,13 +217,13 @@ export async function PUT(request: NextRequest) {
                 status: 'draft',
               },
               message: '已取消发布',
-            });
+            }, { headers: SHIBA_RESPONSE_HEADERS });
             
           case 'edit':
             if (!instructions) {
               return NextResponse.json(
                 { success: false, error: 'missing_instructions', message: '缺少编辑指令' },
-                { status: 400 }
+                { status: 400, headers: SHIBA_RESPONSE_HEADERS }
               );
             }
             // AI辅助编辑 - 简单实现：支持标题和标签修改
@@ -238,7 +245,7 @@ export async function PUT(request: NextRequest) {
             if (Object.keys(updates).length === 0) {
               return NextResponse.json(
                 { success: false, error: 'invalid_instructions', message: '无法解析编辑指令' },
-                { status: 400 }
+                { status: 400, headers: SHIBA_RESPONSE_HEADERS }
               );
             }
             
@@ -251,7 +258,7 @@ export async function PUT(request: NextRequest) {
                 changes: updates,
               },
               message: '已更新',
-            });
+            }, { headers: SHIBA_RESPONSE_HEADERS });
             
           case 'view':
             // 标记为最近查看
@@ -263,12 +270,12 @@ export async function PUT(request: NextRequest) {
                 shortId: toShortId(targetId),
                 last_created_entry_id: session?.last_created_entry_id,
               },
-            });
+            }, { headers: SHIBA_RESPONSE_HEADERS });
             
           default:
             return NextResponse.json(
               { success: false, error: 'unknown_action', message: '未知操作' },
-              { status: 400 }
+              { status: 400, headers: SHIBA_RESPONSE_HEADERS }
             );
         }
       }
@@ -319,19 +326,19 @@ export async function PUT(request: NextRequest) {
           success: true,
           data: { updated, results },
           message: `已更新 ${updated} 条目`,
-        });
+        }, { headers: SHIBA_RESPONSE_HEADERS });
       }
       
       return NextResponse.json(
         { success: false, error: 'missing_params', message: '缺少ID参数' },
-        { status: 400 }
+        { status: 400, headers: SHIBA_RESPONSE_HEADERS }
       );
     });
   } catch (error) {
     console.error('SHIBA update error:', error);
     return NextResponse.json(
       { success: false, error: 'server_error', message: '服务器错误' },
-      { status: 500 }
+      { status: 500, headers: SHIBA_RESPONSE_HEADERS }
     );
   }
 }
@@ -346,7 +353,7 @@ export async function DELETE(request: NextRequest) {
       if (!id) {
         return NextResponse.json(
           { success: false, error: 'missing_id', message: '缺少ID参数' },
-          { status: 400 }
+          { status: 400, headers: SHIBA_RESPONSE_HEADERS }
         );
       }
       
@@ -358,7 +365,7 @@ export async function DELETE(request: NextRequest) {
         if (!lastId) {
           return NextResponse.json(
             { success: false, error: 'no_last_entry', message: '没有最近创建的条目' },
-            { status: 400 }
+            { status: 400, headers: SHIBA_RESPONSE_HEADERS }
           );
         }
         targetId = lastId;
@@ -375,14 +382,14 @@ export async function DELETE(request: NextRequest) {
       if (!entry) {
         return NextResponse.json(
           { success: false, error: 'not_found', message: 'SHIBA条目不存在' },
-          { status: 404 }
+          { status: 404, headers: SHIBA_RESPONSE_HEADERS }
         );
       }
       
       if (entry.author_id !== currentUser.id) {
         return NextResponse.json(
           { success: false, error: 'forbidden', message: '无权限' },
-          { status: 403 }
+          { status: 403, headers: SHIBA_RESPONSE_HEADERS }
         );
       }
       
@@ -396,13 +403,13 @@ export async function DELETE(request: NextRequest) {
           deleted: true,
         },
         message: '已删除',
-      });
+      }, { headers: SHIBA_RESPONSE_HEADERS });
     });
   } catch (error) {
     console.error('Delete SHIBA entry error:', error);
     return NextResponse.json(
       { success: false, error: 'server_error', message: '服务器错误' },
-      { status: 500 }
+      { status: 500, headers: SHIBA_RESPONSE_HEADERS }
     );
   }
 }

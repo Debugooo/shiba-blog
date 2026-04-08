@@ -830,7 +830,7 @@ export function getAllSHIBATags(): { tag: string; count: number }[] {
     .sort((a, b) => b.count - a.count);
 }
 
-export function getAllSHIBACategories(): { category: string; count: number }[] {
+export function getAllSHIBACategories(): { category: string; count: number; description?: string }[] {
   const db = readDB();
   const categoryCounts = new Map<string, number>();
   
@@ -840,8 +840,26 @@ export function getAllSHIBACategories(): { category: string; count: number }[] {
     }
   });
   
+  // 预设分类描述
+  const categoryDescriptions: Record<string, string> = {
+    '编程开发': '代码、算法、技术实现等开发相关知识',
+    'DevOps': '部署、CI/CD、服务器运维等',
+    '数据库': 'SQL、NoSQL、查询优化等数据库相关',
+    'AI与机器学习': '人工智能、深度学习、模型训练等',
+    '前端开发': 'React、Vue、JavaScript等前端技术',
+    '后端开发': 'Node、Python、Java等后端服务',
+    '云计算': 'AWS、Azure、云原生等',
+    '安全': '认证、加密、安全防护等',
+    '性能优化': '缓存、并发、性能调优等',
+    '工具使用': '编辑器、命令行、开发工具等',
+  };
+  
   return Array.from(categoryCounts.entries())
-    .map(([category, count]) => ({ category, count }))
+    .map(([category, count]) => ({ 
+      category, 
+      count,
+      description: categoryDescriptions[category],
+    }))
     .sort((a, b) => b.count - a.count);
 }
 

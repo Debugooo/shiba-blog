@@ -6,6 +6,13 @@ import {
   SHIBAEntry,
 } from '@/lib/db';
 
+// SHIBA API Headers
+const SHIBA_RESPONSE_HEADERS = {
+  'X-Shiba-Source': 'agent',
+  'X-Shiba-Agent': 'Shiba Blog API',
+  'X-Shiba-Model': 'API-v1.1.0',
+};
+
 // 从对话内容中提取SHIBA条目候选
 export async function POST(request: NextRequest) {
   try {
@@ -27,13 +34,13 @@ export async function POST(request: NextRequest) {
         success: true,
         data: { candidates },
         message: `找到 ${candidates.length} 个SHIBA候选`,
-      });
+      }, { headers: SHIBA_RESPONSE_HEADERS });
     });
   } catch (error) {
     console.error('Extract SHIBA error:', error);
     return NextResponse.json(
       { success: false, error: 'server_error', message: '服务器错误' },
-      { status: 500 }
+      { status: 500, headers: SHIBA_RESPONSE_HEADERS }
     );
   }
 }
@@ -43,58 +50,71 @@ function extractSHIBACandidates(content: string, maxCount: number): {
   title: string;
   content: string;
   tags: string[];
+  type: 'discovery' | 'tip' | 'debug' | 'aha' | 'insight';
+  category?: string;
   confidence: number;
 }[] {
   const candidates: {
     title: string;
     content: string;
     tags: string[];
+    type: 'discovery' | 'tip' | 'debug' | 'aha' | 'insight';
+    category?: string;
     confidence: number;
   }[] = [];
   
   // 分割对话为段落
   const paragraphs = content.split(/\n\n+/).filter(p => p.trim().length > 50);
   
-  // 识别知识点的模式
-  const patterns = [
+  // 识别知识点的模式及其类型
+  const patterns: { pattern: RegExp; type: 'discovery' | 'tip' | 'debug' | 'aha' | 'insight' }[] = [
     // 发现类
-    /(?:发现|found|realized|learned|注意到|notice|惊喜|aha)[：:]\s*(.+?)(?:\n|$)/gi,
+    { pattern: /(?:发现|found|realized|learned|注意到|notice|惊喜|aha|原来|没想到|竟然|惊讶)[：:]\s*(.+?)(?:\n|$)/gi, type: 'discovery' },
     // 技巧类
-    /(?:技巧|tip|trick|快捷键|shortcut|command|命令)[：:]\s*(.+?)(?:\n|$)/gi,
+    { pattern: /(?:技巧|tip|trick|快捷键|shortcut|command|命令|高效|省时)[：:]\s*(.+?)(?:\n|$)/gi, type: 'tip' },
     // 解决方法类
-    /(?:解决方案|solution|修复|fix|解决|solved|突破)[：:]\s*(.+?)(?:\n|$)/gi,
+    { pattern: /(?:解决方案|solution|修复|fix|解决|solved|突破|better|s更好)[：:]\s*(.+?)(?:\n|$)/gi, type: 'debug' },
     // 代码片段类
-    /(?:代码|code|```)([\s\S]+?)```/gi,
+    { pattern: /(?:代码|code|```)([\s\S]+?)```/gi, type: 'tip' },
     // 有趣事实类
-    /(?:有趣|interesting|惊讶|surprising|fascinating|没想到|didn't know)[：:]\s*(.+?)(?:\n|$)/gi,
+    { pattern: /(?:有趣|interesting|惊讶|surprising|fascinating|amazing|awesome)[：:]\s*(.+?)(?:\n|$)/gi, type: 'aha' },
   ];
   
-  const keywords = [
-    'learned', 'found', 'discovered', 'realized', '注意', '发现',
-    '技巧', 'tip', 'trick', '快捷键', 'shortcut', 'command',
-    '解决方案', 'solution', '修复', 'fix', '解决',
-    '原来', '竟然', '没想到', '惊讶', '有趣'
+  // 关键词及其对应的类型
+  const keywordTypes: { keywords: string[]; type: 'discovery' | 'tip' | 'debug' | 'aha' | 'insight' }[] = [
+    { keywords: ['发现', 'found', 'discovered', 'realized', '原来', '竟然', '没想到'], type: 'discovery' },
+    { keywords: ['技巧', 'tip', 'trick', '快捷键', 'shortcut', 'command', '高效', '省时'], type: 'tip' },
+    { keywords: ['解决方案', 'solution', '修复', 'fix', '解决', 'solved', '突破', 'bug'], type: 'debug' },
+    { keywords: ['有趣', 'interesting', '惊讶', 'surprising', 'fascinating', 'aha'], type: 'aha' },
   ];
   
   paragraphs.forEach(para => {
     const lowerPara = para.toLowerCase();
     
-    // 检查是否包含知识点关键词
-    const hasKeyword = keywords.some(k => lowerPara.includes(k.toLowerCase()));
+    // 检查段落类型
+    let detectedType: 'discovery' | 'tip' | 'debug' | 'aha' | 'insight' = 'insight';
+    for (const kt of keywordTypes) {
+      if (kt.keywords.some(k => lowerPara.includes(k.toLowerCase()))) {
+        detectedType = kt.type;
+        break;
+      }
+    }
     
     // 检查是否匹配模式
     let matched = false;
-    patterns.forEach(pattern => {
+    patterns.forEach(({ pattern, type }) => {
       const matches = para.match(pattern);
       if (matches) {
         matched = true;
         matches.forEach(match => {
-          const content = match.replace(/^[^：:]+[：:]\s*/, '').trim();
-          if (content.length > 20) {
+          const extractedContent = match.replace(/^[^：:]+[：:]\s*/, '').trim();
+          if (extractedContent.length > 20) {
             candidates.push({
-              title: generateTitle(content),
-              content: content,
-              tags: extractTags(content),
+              title: generateTitle(extractedContent),
+              content: extractedContent,
+              tags: extractTags(extractedContent),
+              type: type,
+              category: detectCategory(extractedContent),
               confidence: 0.9,
             });
           }
@@ -103,13 +123,18 @@ function extractSHIBACandidates(content: string, maxCount: number): {
     });
     
     // 如果段落足够长且包含关键词，添加为候选
-    if (!matched && hasKeyword && para.length > 100) {
-      candidates.push({
-        title: generateTitle(para),
-        content: para.trim(),
-        tags: extractTags(para),
-        confidence: 0.6,
-      });
+    if (!matched && paragraphs.length <= maxCount * 2 && para.length > 100) {
+      const hasKeyword = keywordTypes.some(kt => kt.keywords.some(k => lowerPara.includes(k.toLowerCase())));
+      if (hasKeyword || para.length > 200) {
+        candidates.push({
+          title: generateTitle(para),
+          content: para.trim(),
+          tags: extractTags(para),
+          type: detectedType,
+          category: detectCategory(para),
+          confidence: hasKeyword ? 0.7 : 0.5,
+        });
+      }
     }
   });
   
@@ -162,6 +187,8 @@ function deduplicateCandidates(candidates: {
   title: string;
   content: string;
   tags: string[];
+  type: 'discovery' | 'tip' | 'debug' | 'aha' | 'insight';
+  category?: string;
   confidence: number;
 }[]): typeof candidates {
   const seen = new Set<string>();
@@ -171,4 +198,30 @@ function deduplicateCandidates(candidates: {
     seen.add(key);
     return true;
   });
+}
+
+// 自动检测内容分类
+function detectCategory(content: string): string | undefined {
+  const lowerContent = content.toLowerCase();
+  
+  const categoryPatterns: { category: string; keywords: string[] }[] = [
+    { category: '编程开发', keywords: ['code', 'function', 'class', 'api', '函数', '代码', '编程', '开发', 'algorithm'] },
+    { category: 'DevOps', keywords: ['docker', 'kubernetes', 'ci/cd', 'deploy', 'git', 'pipeline', '服务器', '部署'] },
+    { category: '数据库', keywords: ['sql', 'database', 'mysql', 'mongodb', 'redis', '查询', '数据库', '表', '索引'] },
+    { category: 'AI与机器学习', keywords: ['ai', 'machine learning', 'neural', 'gpt', 'llm', 'model', '训练', '模型', '深度学习'] },
+    { category: '前端开发', keywords: ['react', 'vue', 'angular', 'css', 'html', 'javascript', 'typescript', '前端', '组件'] },
+    { category: '后端开发', keywords: ['server', 'backend', 'node', 'python', 'java', 'golang', '后端', '接口', '微服务'] },
+    { category: '云计算', keywords: ['aws', 'azure', 'gcp', 'cloud', 'serverless', 'lambda', '云', '存储', '计算'] },
+    { category: '安全', keywords: ['security', 'auth', 'encryption', 'password', 'vulnerability', '安全', '认证', '加密'] },
+    { category: '性能优化', keywords: ['performance', 'optimize', 'cache', 'speed', 'benchmark', '性能', '优化', '缓存', '并发'] },
+    { category: '工具使用', keywords: ['tool', 'editor', 'ide', 'vim', 'terminal', 'shell', '工具', '编辑器', '命令行'] },
+  ];
+  
+  for (const { category, keywords } of categoryPatterns) {
+    if (keywords.some(k => lowerContent.includes(k))) {
+      return category;
+    }
+  }
+  
+  return undefined;
 }

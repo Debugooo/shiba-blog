@@ -18,12 +18,21 @@ interface SHIBAEntry {
   title: string;
   content: string;
   tags: string[];
+  category?: string;
   status: 'draft' | 'published';
   views: number;
   likes: number;
   created_at: string;
   shortId?: string;
+  source?: 'human' | 'agent';
 }
+
+// SHIBA HTTP Headers
+const SHIBA_HEADERS = {
+  'X-Shiba-Source': 'agent',
+  'X-Shiba-Agent': 'Shiba Blog CLI',
+  'X-Shiba-Model': 'CLI-v1.1.0',
+};
 
 function loadConfig(): Config {
   try {
@@ -91,6 +100,7 @@ export async function shibaCommand(options: {
   list?: string | boolean;
   search?: string;
   tags?: boolean;
+  categories?: boolean;
   publish?: string;
   unpublish?: string;
   edit?: string;
@@ -99,6 +109,7 @@ export async function shibaCommand(options: {
   sync?: boolean;
   status?: boolean;
   extract?: boolean;
+  analyze?: boolean;
 }) {
   const config = loadConfig();
   const baseUrl = getBaseUrl(config);
@@ -112,6 +123,7 @@ export async function shibaCommand(options: {
   const headers = {
     'Authorization': `Bearer ${config.apiKey}`,
     'Content-Type': 'application/json',
+    ...SHIBA_HEADERS,
   };
 
   try {
@@ -249,9 +261,40 @@ export async function shibaCommand(options: {
         if (tags.length === 0) {
           console.log(chalk.yellow('暂无标签'));
         } else {
-          tags.forEach(({ tag, count }: { tag: string; count: number }) => {
+          tags.slice(0, 20).forEach(({ tag, count }: { tag: string; count: number }) => {
             console.log(`  ${chalk.cyan('#' + tag)} ${chalk.gray(`(${count})`)}`);
           });
+        }
+        console.log('');
+      }
+      return;
+    }
+
+    // /shiba categories
+    if (options.categories) {
+      const response = await axios.get(`${baseUrl}/api/shiba?categories=true`, { headers });
+      
+      if (response.data.success) {
+        const categories = response.data.data.categories || [];
+        
+        console.log(chalk.bold('\n📂 SHIBA 分类列表:\n'));
+        
+        if (categories.length === 0) {
+          console.log(chalk.yellow('暂无分类'));
+        } else {
+          console.log(chalk.gray('─'.repeat(60)));
+          categories.forEach(({ category, count, description }: { 
+            category: string; 
+            count: number;
+            description?: string;
+          }) => {
+            console.log(`  ${chalk.green('●')} ${chalk.bold(category)} ${chalk.gray(`[${count}条]`)}`);
+            if (description) {
+              console.log(`    ${chalk.gray(description)}`);
+            }
+          });
+          console.log(chalk.gray('─'.repeat(60)));
+          console.log(chalk.gray(`共 ${categories.length} 个分类`));
         }
         console.log('');
       }
@@ -528,16 +571,34 @@ export async function shibaCommand(options: {
       return;
     }
 
-    // 无参数，显示帮助
-    console.log(chalk.bold(`
+    // /shiba analyze - 无参数自动分析
+    if (options.analyze || (!options.content && !options.list && !options.search && 
+        !options.tags && !options.categories && !options.publish && !options.unpublish && 
+        !options.edit && !options.delete && !options.batch && !options.sync && 
+        !options.status && !options.extract)) {
+      
+      // 如果没有任何参数，检查 stdin 是否有内容
+      const stdinChunks: Buffer[] = [];
+      if (!process.stdin.isTTY) {
+        for await (const chunk of process.stdin) {
+          stdinChunks.push(chunk);
+        }
+      }
+      
+      const content = Buffer.concat(stdinChunks).toString('utf-8').trim();
+      
+      if (!content) {
+        // 无内容时显示帮助并提示
+        console.log(chalk.bold(`
 🐕 SHIBA - Shiba Instant Blog Article
 
 用法:
   shiba shiba -c "<content>"              快速创建SHIBA
-  shiba shiba -l [drafts|published|all]    列出SHIBA (默认: 全部)
-  shiba shiba -s "<keyword>"               搜索SHIBA
-  shiba shiba -t                          查看标签统计
-  shiba shiba --status                    查看状态统计
+  shiba shiba -l [drafts|published|all]   列出SHIBA (默认: 全部)
+  shiba shiba -s "<keyword>"              搜索SHIBA
+  shiba shiba -t                           查看标签统计
+  shiba shiba --cat                        查看分类列表
+  shiba shiba --analyze                    自动分析对话提取SHIBA
   shiba shiba -p <id|last>                发布SHIBA (支持last关键字)
   shiba shiba --unpublish <id>            取消发布
   shiba shiba --edit <id> [instructions]  编辑/查看SHIBA
@@ -545,19 +606,130 @@ export async function shibaCommand(options: {
   shiba shiba --batch <topics>            批量创建 (逗号分隔主题)
   shiba shiba --sync                      同步到本地文件
   shiba shiba -e                          从stdin提取SHIBA
+  shiba shiba --status                    查看状态统计
 
 ID系统:
   • 完整ID: shiba_xxx-yyy
   • 短ID:   ...yyy (后8位)
   • last:   最近创建的条目
 
+分析模式 - 使用管道传入对话内容:
+  cat conversation.txt | shiba shiba --analyze
+  git log --oneline | shiba shiba --analyze
+
 示例:
-  shiba shiba --list published            # 查看已发布的条目
-  shiba shiba --publish last              # 发布最近创建的条目
+  shiba shiba --list published             # 查看已发布的条目
+  shiba shiba --publish last             # 发布最近创建的条目
   shiba shiba --edit abc123 title: 新标题 # 修改标题
   shiba shiba --batch AI,区块链,量子计算  # 批量创建
-  echo "内容..." | shiba shiba --extract  # 从文本提取知识点
+  echo "内容..." | shiba shiba --analyze  # 分析并提取知识点
 `));
+        return;
+      }
+      
+      // 分析内容
+      console.log(chalk.bold('\n🔍 正在分析对话内容...\n'));
+      
+      try {
+        const response = await axios.post(
+          `${baseUrl}/api/shiba/extract`,
+          { content, max_candidates: 5 },
+          { headers }
+        );
+
+        if (response.data.success) {
+          const candidates = response.data.data.candidates || [];
+          
+          if (candidates.length === 0) {
+            console.log(chalk.yellow('⚠️  未从内容中发现值得记录的知识点'));
+            console.log(chalk.gray('尝试提供更多对话内容或包含具体的技术细节'));
+            return;
+          }
+          
+          console.log(chalk.green(`✨ 发现 ${candidates.length} 个值得记录的知识点:\n`));
+          console.log(chalk.gray('─'.repeat(50)));
+          
+          // 显示发现的知识点
+          for (let i = 0; i < candidates.length; i++) {
+            const c = candidates[i];
+            const insightType = c.type || 'insight';
+            const icon = insightType === 'debug' ? '🔧' : 
+                         insightType === 'tip' ? '💡' : 
+                         insightType === 'aha' ? '🎯' : 
+                         insightType === 'discovery' ? '🔍' : '📝';
+            
+            console.log(`\n${icon} ${chalk.bold(`${i + 1}. ${c.title}`)}`);
+            console.log(`   ${chalk.cyan(c.content.substring(0, 100))}${c.content.length > 100 ? '...' : ''}`);
+            console.log(`   ${chalk.gray('标签:')} ${c.tags.map((t: string) => chalk.yellow('#' + t)).join(' ')}`);
+            console.log(`   ${chalk.gray('置信度:')} ${chalk.green((c.confidence * 100).toFixed(0) + '%')}`);
+          }
+          
+          console.log(chalk.gray('\n─'.repeat(50)));
+          
+          // 询问是否创建
+          const { create } = await inquirer.prompt([
+            {
+              type: 'confirm',
+              name: 'create',
+              message: `是否创建这 ${candidates.length} 个 SHIBA 条目?`,
+              default: true,
+            },
+          ]);
+          
+          if (create) {
+            const { status } = await inquirer.prompt([
+              {
+                type: 'list',
+                name: 'status',
+                message: '保存为:',
+                choices: ['草稿 (draft)', '直接发布 (published)'],
+                default: 0,
+              },
+            ]);
+            
+            const isPublished = status.includes('发布');
+            let created = 0;
+            
+            console.log(chalk.bold('\n📝 正在创建 SHIBA 条目...\n'));
+            
+            for (let i = 0; i < candidates.length; i++) {
+              const c = candidates[i];
+              process.stdout.write(`创建 "${c.title}"... `);
+              
+              try {
+                const createResponse = await axios.post(
+                  `${baseUrl}/api/shiba`,
+                  {
+                    title: c.title,
+                    content: c.content,
+                    tags: c.tags || [],
+                    category: c.category,
+                    status: isPublished ? 'published' : 'draft',
+                  },
+                  { headers }
+                );
+                
+                if (createResponse.data.success) {
+                  created++;
+                  console.log(chalk.green('✓'));
+                } else {
+                  console.log(chalk.red('✗'));
+                }
+              } catch (e) {
+                console.log(chalk.red('✗'));
+              }
+            }
+            
+            console.log(chalk.green(`\n✅ 完成: 成功创建 ${created}/${candidates.length} 个 SHIBA 条目`));
+          }
+        }
+      } catch (error: any) {
+        // 如果 API 不存在，使用本地分析
+        console.log(chalk.yellow('⚠️  分析 API 暂不可用，请通过管道传入对话内容'));
+        console.log(chalk.gray('使用 cat conversation.txt | shiba shiba --analyze'));
+      }
+      return;
+    }
   } catch (error: any) {
     console.log(chalk.red('❌ 操作失败:'), error.response?.data?.message || error.message);
     process.exit(1);

@@ -60,6 +60,8 @@ program
   .option('-l, --list [filter]', '列出SHIBA (drafts|published|all)')
   .option('-s, --search <keyword>', '搜索SHIBA条目')
   .option('-t, --tags', '查看标签分类')
+  .option('--cat, --categories', '查看分类列表')
+  .option('--analyze', '自动分析对话提取SHIBA (支持管道输入)')
   .option('--status', '查看状态统计')
   .option('-p, --publish <id>', '发布SHIBA (支持 last 关键字)')
   .option('--unpublish <id>', '取消发布')
