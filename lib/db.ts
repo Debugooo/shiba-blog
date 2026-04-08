@@ -129,6 +129,14 @@ export interface SHIBAEntry {
   published_at?: string;
 }
 
+// SHIBA 会话状态
+export interface SHIBASessionState {
+  user_id: string;
+  last_created_entry_id: string | null;
+  last_viewed_entry_id: string | null;
+  updated_at: string;
+}
+
 // ==================== 数据库结构 ====================
 
 interface Database {
@@ -142,6 +150,7 @@ interface Database {
   bookmarks: Bookmark[];
   pats: PAT[];
   shiba_entries: SHIBAEntry[];
+  shiba_session_states: SHIBASessionState[];
 }
 
 const initialData: Database = {
@@ -155,6 +164,7 @@ const initialData: Database = {
   bookmarks: [],
   pats: [],
   shiba_entries: [],
+  shiba_session_states: [],
 };
 
 // ==================== 数据库操作 ====================
@@ -186,6 +196,9 @@ export function readDB(): Database {
   if (!parsed.pats) {
     parsed.pats = [];
   }
+  if (!parsed.shiba_session_states) {
+    parsed.shiba_session_states = [];
+  }
   
   return parsed;
 }
@@ -197,6 +210,82 @@ export function writeDB(data: Database): void {
 
 export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// ==================== SHIBA ID 工具函数 ====================
+
+/**
+ * 将完整ID转换为短ID显示格式: shiba_xxx-yyy -> ...yyy
+ */
+export function toShortId(id: string): string {
+  const parts = id.split('_');
+  if (parts.length > 1) {
+    return `...${parts[parts.length - 1].slice(-8)}`;
+  }
+  return `...${id.slice(-8)}`;
+}
+
+/**
+ * 根据短ID查找完整ID
+ * 支持: shiba_xxx-yyy, ...yyy, xxx-yyy, yyy (后8位匹配)
+ */
+export function resolveSHIBAId(shortId: string, authorId?: string): string | null {
+  const db = readDB();
+  
+  // 精确匹配
+  const exactMatch = db.shiba_entries.find(s => s.id === shortId);
+  if (exactMatch) return exactMatch.id;
+  
+  // 完整ID后8位匹配
+  const entries = authorId 
+    ? db.shiba_entries.filter(s => s.author_id === authorId)
+    : db.shiba_entries;
+  
+  const last8 = shortId.startsWith('...') ? shortId.slice(3) : shortId;
+  
+  const match = entries.find(s => {
+    const idLast8 = s.id.slice(-8);
+    const partsLast8 = s.id.split('_').pop()?.slice(-8);
+    return idLast8 === last8 || partsLast8 === last8;
+  });
+  
+  return match ? match.id : null;
+}
+
+// ==================== SHIBA 会话状态管理 ====================
+
+export function getSHIBASessionState(userId: string): SHIBASessionState | null {
+  const db = readDB();
+  return db.shiba_session_states.find(s => s.user_id === userId) || null;
+}
+
+export function updateSHIBASessionState(userId: string, updates: Partial<SHIBASessionState>): void {
+  const db = readDB();
+  const index = db.shiba_session_states.findIndex(s => s.user_id === userId);
+  
+  if (index === -1) {
+    // 创建新状态
+    db.shiba_session_states.push({
+      user_id: userId,
+      last_created_entry_id: updates.last_created_entry_id || null,
+      last_viewed_entry_id: updates.last_viewed_entry_id || null,
+      updated_at: new Date().toISOString(),
+    });
+  } else {
+    // 更新现有状态
+    db.shiba_session_states[index] = {
+      ...db.shiba_session_states[index],
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+  }
+  
+  writeDB(db);
+}
+
+export function getLastCreatedSHIBAId(userId: string): string | null {
+  const state = getSHIBASessionState(userId);
+  return state?.last_created_entry_id || null;
 }
 
 // ==================== 用户操作 ====================
@@ -454,7 +543,7 @@ export function createNotification(data: {
   type: Notification['type'];
   from_user_id: string;
   from_username: string;
-  target_type: Notification['target_type'];
+  target_type: 'post' | 'comment' | 'user' | 'shiba';
   target_id: string;
   content: string;
 }): Notification {
@@ -612,6 +701,21 @@ export function createSHIBAEntry(data: {
   };
   
   db.shiba_entries.push(shiba);
+  
+  // 更新会话状态 - 记录最后创建的条目ID
+  const sessionIndex = db.shiba_session_states.findIndex(s => s.user_id === data.author_id);
+  if (sessionIndex === -1) {
+    db.shiba_session_states.push({
+      user_id: data.author_id,
+      last_created_entry_id: shiba.id,
+      last_viewed_entry_id: null,
+      updated_at: new Date().toISOString(),
+    });
+  } else {
+    db.shiba_session_states[sessionIndex].last_created_entry_id = shiba.id;
+    db.shiba_session_states[sessionIndex].updated_at = new Date().toISOString();
+  }
+  
   writeDB(db);
   return shiba;
 }
@@ -739,6 +843,47 @@ export function getAllSHIBACategories(): { category: string; count: number }[] {
   return Array.from(categoryCounts.entries())
     .map(([category, count]) => ({ category, count }))
     .sort((a, b) => b.count - a.count);
+}
+
+// SHIBA 状态统计
+export function getSHIBAStats(authorId?: string): {
+  total: number;
+  drafts: number;
+  published: number;
+  totalViews: number;
+  totalLikes: number;
+  tagsCount: number;
+  categoriesCount: number;
+} {
+  const db = readDB();
+  let entries = db.shiba_entries;
+  
+  if (authorId) {
+    entries = entries.filter(s => s.author_id === authorId);
+  }
+  
+  const drafts = entries.filter(s => s.status === 'draft').length;
+  const published = entries.filter(s => s.status === 'published').length;
+  const totalViews = entries.reduce((sum, s) => sum + s.views, 0);
+  const totalLikes = entries.reduce((sum, s) => sum + s.likes, 0);
+  
+  // 统计标签和分类
+  const tagsSet = new Set<string>();
+  const categoriesSet = new Set<string>();
+  entries.forEach(s => {
+    s.tags.forEach(tag => tagsSet.add(tag));
+    if (s.category) categoriesSet.add(s.category);
+  });
+  
+  return {
+    total: entries.length,
+    drafts,
+    published,
+    totalViews,
+    totalLikes,
+    tagsCount: tagsSet.size,
+    categoriesCount: categoriesSet.size,
+  };
 }
 
 // ==================== 导出用户数据 ====================

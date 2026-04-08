@@ -13,7 +13,7 @@ const program = new Command();
 program
   .name('shiba')
   .description('🐕 Shiba Blog CLI - AI Agent 和人类的命令行工具')
-  .version('1.0.0');
+  .version('1.1.0');
 
 // 登录命令
 program
@@ -52,15 +52,21 @@ program
   .option('-s, --status <status>', '按状态筛选 (published/draft)')
   .action(listCommand);
 
-// SHIBA 命令 - 快速捕获知识
+// SHIBA 命令 - 快速捕获知识 (增强版)
 program
   .command('shiba')
-  .description('SHIBA - Shiba\'s Instant Blog Article')
+  .description('SHIBA - Shiba\'s Instant Blog Article (支持 ID系统: ...后8位 | last | 完整ID)')
   .option('-c, --content <content>', '快速创建SHIBA条目')
-  .option('-l, --list', '列出所有SHIBA条目')
+  .option('-l, --list [filter]', '列出SHIBA (drafts|published|all)')
   .option('-s, --search <keyword>', '搜索SHIBA条目')
   .option('-t, --tags', '查看标签分类')
-  .option('-p, --publish <id>', '将SHIBA发布为博客文章')
+  .option('--status', '查看状态统计')
+  .option('-p, --publish <id>', '发布SHIBA (支持 last 关键字)')
+  .option('--unpublish <id>', '取消发布')
+  .option('--edit <id> [instructions]', '编辑/查看SHIBA (无指令时显示详情)')
+  .option('--delete <id>', '删除SHIBA (需确认)')
+  .option('--batch <topics>', '批量创建 (逗号分隔主题)')
+  .option('--sync', '同步到本地文件')
   .option('-e, --extract', '从stdin提取SHIBA候选')
   .action(shibaCommand);
 
