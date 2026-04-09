@@ -135,7 +135,32 @@ export interface SHIBASessionState {
   last_created_entry_id: string | null;
   last_viewed_entry_id: string | null;
   updated_at: string;
+  autoDetectState?: AutoDetectState;
 }
+
+// Auto-detection 状态
+export interface AutoDetectState {
+  enabled: boolean;           // 是否启用自动检测
+  sessionRejected: boolean;   // 本次 session 是否已拒绝
+  lastAcceptedTurn: number;   // 上次接受时的对话轮次
+  currentTurn: number;        // 当前对话轮次
+  cooldownTurns: number;      // 冷却轮次数（默认15）
+  lastSuggestionAt: string | null; // 上次建议时间
+  totalSuggestions: number;   // 累计建议次数
+  totalAccepted: number;      // 累计接受次数
+}
+
+// Auto-detection 默认状态
+export const DEFAULT_AUTO_DETECT_STATE: AutoDetectState = {
+  enabled: true,
+  sessionRejected: false,
+  lastAcceptedTurn: 0,
+  currentTurn: 0,
+  cooldownTurns: 15,
+  lastSuggestionAt: null,
+  totalSuggestions: 0,
+  totalAccepted: 0,
+};
 
 // ==================== 数据库结构 ====================
 
@@ -286,6 +311,141 @@ export function updateSHIBASessionState(userId: string, updates: Partial<SHIBASe
 export function getLastCreatedSHIBAId(userId: string): string | null {
   const state = getSHIBASessionState(userId);
   return state?.last_created_entry_id || null;
+}
+
+// ==================== SHIBA Auto-detection 状态管理 ====================
+
+/**
+ * 获取用户的 Auto-detection 状态
+ */
+export function getAutoDetectState(userId: string): AutoDetectState {
+  const state = getSHIBASessionState(userId);
+  return state?.autoDetectState || { ...DEFAULT_AUTO_DETECT_STATE };
+}
+
+/**
+ * 更新用户的 Auto-detection 状态
+ */
+export function updateAutoDetectState(
+  userId: string,
+  updates: Partial<AutoDetectState>
+): AutoDetectState {
+  const db = readDB();
+  const index = db.shiba_session_states.findIndex(s => s.user_id === userId);
+  
+  if (index === -1) {
+    // 创建新状态
+    const newState: AutoDetectState = {
+      ...DEFAULT_AUTO_DETECT_STATE,
+      ...updates,
+    };
+    
+    db.shiba_session_states.push({
+      user_id: userId,
+      last_created_entry_id: null,
+      last_viewed_entry_id: null,
+      updated_at: new Date().toISOString(),
+      autoDetectState: newState,
+    });
+  } else {
+    // 更新现有状态
+    const currentState = db.shiba_session_states[index].autoDetectState || {};
+    const newState = {
+      ...DEFAULT_AUTO_DETECT_STATE,
+      ...currentState,
+      ...updates,
+    };
+    
+    db.shiba_session_states[index] = {
+      ...db.shiba_session_states[index],
+      autoDetectState: newState,
+      updated_at: new Date().toISOString(),
+    };
+  }
+  
+  writeDB(db);
+  
+  return getAutoDetectState(userId);
+}
+
+/**
+ * 增加对话轮次
+ */
+export function incrementAutoDetectTurn(userId: string): number {
+  const state = getAutoDetectState(userId);
+  const newTurn = state.currentTurn + 1;
+  
+  updateAutoDetectState(userId, { currentTurn: newTurn });
+  
+  return newTurn;
+}
+
+/**
+ * 接受建议
+ */
+export function acceptAutoDetectSuggestion(userId: string): AutoDetectState {
+  const state = getAutoDetectState(userId);
+  
+  return updateAutoDetectState(userId, {
+    lastAcceptedTurn: state.currentTurn,
+    totalAccepted: state.totalAccepted + 1,
+    totalSuggestions: state.totalSuggestions + 1,
+    lastSuggestionAt: new Date().toISOString(),
+  });
+}
+
+/**
+ * 拒绝建议（整个session不再打扰）
+ */
+export function rejectAutoDetectSuggestion(userId: string): AutoDetectState {
+  return updateAutoDetectState(userId, {
+    sessionRejected: true,
+    totalSuggestions: getAutoDetectState(userId).totalSuggestions + 1,
+  });
+}
+
+/**
+ * 重置 session 状态
+ */
+export function resetAutoDetectSession(userId: string): AutoDetectState {
+  return updateAutoDetectState(userId, {
+    sessionRejected: false,
+    currentTurn: 0,
+  });
+}
+
+/**
+ * 启用/禁用自动检测
+ */
+export function toggleAutoDetect(
+  userId: string,
+  enabled: boolean
+): AutoDetectState {
+  return updateAutoDetectState(userId, { enabled });
+}
+
+/**
+ * 获取 Auto-detection 统计信息
+ */
+export function getAutoDetectStats(userId: string) {
+  const state = getAutoDetectState(userId);
+  
+  return {
+    enabled: state.enabled,
+    sessionRejected: state.sessionRejected,
+    currentTurn: state.currentTurn,
+    cooldownRemaining: Math.max(
+      0,
+      state.cooldownTurns - (state.currentTurn - state.lastAcceptedTurn)
+    ),
+    totalSuggestions: state.totalSuggestions,
+    totalAccepted: state.totalAccepted,
+    acceptanceRate:
+      state.totalSuggestions > 0
+        ? (state.totalAccepted / state.totalSuggestions) * 100
+        : 0,
+    lastSuggestionAt: state.lastSuggestionAt,
+  };
 }
 
 // ==================== 用户操作 ====================

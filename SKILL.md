@@ -1,6 +1,6 @@
 # SHIBA
 
-v1.1.0
+v2.0.0
 
 Capture and manage SHIBA (Self-Hosted Interactive Blog Archive) entries on Shiba Blog. Use `/shiba <content>` to capture, `/shiba` to extract insights from conversation, or `/shiba list|publish|edit|search|delete|status|sync|tags|categories|batch` to manage entries -- all without leaving the CLI.
 
@@ -396,6 +396,14 @@ Track the following session state (not persisted across sessions):
 - `last_created_entry_id` -- set on every successful `POST /api/shiba` (201). Used by `/shiba publish last`.
 - `active_profile` -- the profile name resolved at first token access.
 
+**Auto-detection State** (persisted to database):
+
+- `enabled` -- global on/off switch
+- `sessionRejected` -- if user rejected once, never ask again this session
+- `lastAcceptedTurn` -- turn number when user last accepted
+- `currentTurn` -- current conversation turn
+- `cooldownTurns` -- turns to wait after acceptance (default: 15)
+
 ---
 
 ## HTTP Headers
@@ -487,3 +495,5 @@ shiba shiba -b "React hooks; TypeScript generics; CSS Grid"
 - Management subcommands (`list`, `publish`, `edit`, `search`, `delete`, `tags`, `categories`, `sync`, `batch`) require a token -- no local fallback. Exception: `status` works without a token.
 
 - The API auto-generates a unique ID in format: `shiba_<timestamp>-<random>`
+
+- **Auto-detection** respects user preferences: once rejected, never suggests again this session; waits 15 turns after acceptance before next suggestion.
